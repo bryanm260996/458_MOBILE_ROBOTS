@@ -16,7 +16,7 @@ class Lights:
                     [{"red": 0, "green": 255, "blue": 0}]*6,  # Green
                     [{"red": 0, "green": 0, "blue": 255}]*6   # Blue
                     ]
-        self.Rand = ["red": random.randint(0, 255), "green": random.randint(0, 255), "blue": random.randint(0, 255)]*6
+        self.Rand = [{"red": random.randint(0, 255), "green": random.randint(0, 255), "blue": random.randint(0, 255)}]*6
         self.Red = [{"red": 255, "green": 0, "blue": 0}]*6
         self.Orange = [{"red": 255, "green": 165, "blue": 0}]*6
         self.Yellow = [{"red": 255, "green": 255, "blue": 0}]*6
