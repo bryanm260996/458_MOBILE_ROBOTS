@@ -12,7 +12,6 @@ class Lights:
         self.ros_node = ros_node
         self.robot_name = robot_name
         self.color = color
-        self.blink_rate = int(blink_rate)
         self.RGB = [[{"red": 255, "green": 0, "blue": 0}]*6,  # Red
                     [{"red": 0, "green": 255, "blue": 0}]*6,  # Green
                     [{"red": 0, "green": 0, "blue": 255}]*6   # Blue
