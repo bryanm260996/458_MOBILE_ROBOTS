@@ -1,31 +1,78 @@
 import roslibpy
 import time
+import random
 
-def run_lights(ros_node, robot_name):
-    # Initialize the LED publisher
-    led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
-
-    # Define color patterns
-    colors = [
-        [{"red": 255, "green": 0, "blue": 0}]*6,  # Red
-        [{"red": 0, "green": 255, "blue": 0}]*6,  # Green
-        [{"red": 0, "green": 0, "blue": 255}]*6   # Blue
-    ]
+class Lights:
     
-    # Main loop
-    try:
-        while True:
-            for color_pattern in colors:
-                # Compose a LightringLeds message
-                lightring_led_message = {"leds": color_pattern, "override_system": True}
-                lightring_ros_msg = roslibpy.Message(lightring_led_message)
+    def __init__ (self, ros_node, robot_name, color):
+        #ros_node: name of node that initializes connection to ROS2 library
+        #robot_name: name of robot
+        #color: color of lights, input arguments include ('RGB', 'Random', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Violet', 'White')
+        self.led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
+        self.ros_node = ros_node
+        self.robot_name = robot_name
+        self.color = color
+        self.blink_rate = int(blink_rate)
+        self.RGB = [[{"red": 255, "green": 0, "blue": 0}]*6,  # Red
+                    [{"red": 0, "green": 255, "blue": 0}]*6,  # Green
+                    [{"red": 0, "green": 0, "blue": 255}]*6   # Blue
+                    ]
+        self.Rand = ["red": random.randint(0, 255), "green": random.randint(0, 255), "blue": random.randint(0, 255)]*6
+        self.Red = [{"red": 255, "green": 0, "blue": 0}]*6
+        self.Orange = [{"red": 255, "green": 165, "blue": 0}]*6
+        self.Yellow = [{"red": 255, "green": 255, "blue": 0}]*6
+        self.Green = [{"red": 0, "green": 255, "blue": 0}]*6
+        self.Blue = [{"red": 0, "green": 0, "blue": 255}]*6
+        self.Violet = [{"red": 148, "green": 0, "blue": 211}]*6
+        self.White = [{"red": 255, "green": 255, "blue": 255}]*6
+        self.Off = [{"red": 0, "green": 0, "blue": 0}]*6
+    
+    def fetch_color(self):
+        if self.color == 'RGB':
+            color_des = self.RGB
+        elif self.color == 'Random':
+            color_des = self.Rand
+        elif self.color == 'Red':
+            color_des = self.Red
+        elif self.color == 'Orange':
+            color_des = self.Orange
+        elif self.color == 'Yellow':
+            color_des = self.Yellow
+        elif self.color == 'Green':
+            color_des = self.Green
+        elif self.color == 'Blue':
+            color_des = self.Blue
+        elif self.color == 'Violet':
+            color_des = self.Violet
+        elif self.color == 'White':
+            color_des = self.White
+        return color_des
+    
+    def init(self):
+        # Initialize the LED publisher
+        self.led_pub.advertise()
+        print('Lightring initialized')
 
-                # Publish the message
-                led_pub.publish(lightring_ros_msg)
-                time.sleep(1)  # Wait for 1 second between updates
-    except KeyboardInterrupt:
-        print("Shutting down lights...")
-    finally:
-        # Clean up when exiting the loop
-        led_pub.unadvertise()
-        ros_node.terminate()
+    def publish(self, color):
+        # Compose a LightringLeds message
+        lightring_led_message = {"leds": color, "override_system": True}
+        lightring_ros_msg = roslibpy.Message(lightring_led_message)
+
+        # Publish the message
+        if self.color == 'RGB':
+            for colors in color:
+                self.led_pub.publish(roslibpy.Message({"leds": colors, "override_system": True}))
+                time.sleep(1)
+        else:
+            self.led_pub.publish(lightring_ros_msg)
+    
+# Main loop
+def lights(ros_node, robot_name, color, blink):
+    #create instance of Lights
+    lightring = Lights(ros_node, robot_name, color, blink)
+    #fetch desired color pattern
+    color_pattern = lightring.fetch_color()
+    #initialize lights
+    lightring.init()
+    #publish lights
+    lightring.publish(color_pattern)
