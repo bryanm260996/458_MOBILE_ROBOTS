@@ -66,7 +66,7 @@ class Lights:
             self.led_pub.publish(lightring_ros_msg)
     
 # Main loop
-def lights(ros_node, robot_name, color):
+def play_lights(ros_node, robot_name, color):
     #create instance of Lights
     lightring = Lights(ros_node, robot_name, color)
     #fetch desired color pattern

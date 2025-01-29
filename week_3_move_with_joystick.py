@@ -1,6 +1,7 @@
 import time
 import roslibpy
 import pygame
+from lights_function import play_lights, Lights
 
 # Initialize pygame for joystick control
 pygame.init()
@@ -33,11 +34,6 @@ def publish_twist(linear_x, angular_z):
     }
     cmd_vel_pub.publish(roslibpy.Message(twist_message))
 
-def set_led_color(r, g, b):
-    led_colors = [{"red": r, "green": g, "blue": b} for _ in range(6)]
-    led_message = {"leds": led_colors, "override_system": True}
-    led_pub.publish(roslibpy.Message(led_message))
-
 # Main function to handle joystick input
 def send_joystick_commands():
     manual_mode = False
@@ -57,14 +53,14 @@ def send_joystick_commands():
                 linear_speed = -joystick.get_axis(1)  # Invert Y-axis for forward/backward
                 angular_speed = joystick.get_axis(0)  # X-axis for rotation
 
-                # Publish velocity and activate red light
+                # Publish velocity and publish red light
                 publish_twist(linear_speed, -angular_speed)
-                set_led_color(255, 255, 0)
+                play_lights(ros_node, robot_name, 'Red')
 
             else:
                 # Stop the robot and turn off lights
                 publish_twist(0.0, 0.0)
-                set_led_color(0, 0, 0)
+                play_lights(ros_node, robot_name, 'Off')
 
             time.sleep(0.1)  # Loop at 10 Hz
 
@@ -73,7 +69,7 @@ def send_joystick_commands():
     finally:
         # Stop the robot and clean up resources
         publish_twist(0.0, 0.0)
-        set_led_color(0, 0, 0)
+        play_lights(ros_node, robot_name, 'Off')
         cmd_vel_pub.unadvertise()
         led_pub.unadvertise()
         ros_node.terminate()
