@@ -36,26 +36,30 @@ class Joystick:
                 if self.joystick.get_button(0):
                     manual_mode = not manual_mode
                     print(f"Manual mode {'activated' if manual_mode else 'deactivated'}")
+                    blink = True
                     time.sleep(0.3)  # Debounce delay
+                elif self.joystick.get_button(1):
+                    #placeholder for other buttons
+                else:
+                    pass
 
                 if manual_mode:
                     # Get joystick axes for linear and angular velocities
-                    linear_speed = -self.joystick.get_axis(1)  # Invert Y-axis for forward/backward
-                    angular_speed = self.joystick.get_axis(0)  # X-axis for rotation
+                    linear_x = -self.joystick.get_axis(1)  # Invert Y-axis for forward/backward
+                    angular_z = self.joystick.get_axis(0)  # X-axis for rotation
 
-                    # Publish velocity and publish red light
-                    publish_twist(linear_speed, -angular_speed)
-                    play_lights(ros_node, robot_name, 'Red')
-
+                    # set light
+                    color = 'Green'
+                elif other_mode:
+                    #placeholder for other modes
                 else:
-                    # Stop the robot and turn off lights
-                    publish_twist(0.0, 0.0)
-                    play_lights(ros_node, robot_name, 'Off')
+                    pass
 
                 time.sleep(0.1)  # Loop at 10 Hz
 
         except KeyboardInterrupt:
             print("Joystick control interrupted.")
+        return color, blink, linear_x, angular_z
     
     def quit(self):
         self.joystick.quit()
