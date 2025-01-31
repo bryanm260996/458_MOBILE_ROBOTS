@@ -15,7 +15,7 @@ if pygame.joystick.get_count() == 0:
 ros_node = roslibpy.Ros(host='192.168.8.104', port=9012)
 ros_node.run()
 
-robot_name = 'echo'
+robot_name = 'foxtrot'
 
 # Joystick class
 class Joystick:
