@@ -6,11 +6,11 @@ import random
 
 # establish roslibpy connection to sim
 ros_node = roslibpy.Ros(host='127.0.0.1', port=9012)
-robot_name = '/juliet'
+robot_name = 'juliet'
 
 # establish connection to foxtrot
 #ros_node = roslibpy.Ros(host='192.168.8.104', port=9012)
-#robot_name = '/foxtrot'
+#robot_name = 'foxtrot'
 
 ros_node.run()
 
@@ -22,11 +22,11 @@ class RobotController:
         self.stop_event = threading.Event()
         self.lock = threading.Lock()
         # create publisher on cmd_lightring topic, documentation at https://github.com/iRobotEducation/irobot_create_msgs/tree/rolling
-        self.led_pub = roslibpy.Topic(ros_node, f'{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
+        self.led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
         # publisher on cmd_vel topic
-        self.circle_track_pub = roslibpy.Topic(ros_node, f'{robot_name}/cmd_vel', 'geometry_msgs/Twist')
+        self.circle_track_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
         # publisher to cmd_audio topic
-        self.audio_pub = roslibpy.Topic(ros_node, f'{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
+        self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
 
     def circle_track(self):
         # placeholder for robot movement
