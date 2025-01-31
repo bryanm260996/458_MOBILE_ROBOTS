@@ -7,7 +7,7 @@ class Lights:
     def __init__ (self, ros_node, robot_name, color):
         #ros_node: name of node that initializes connection to ROS2 library
         #robot_name: name of robot
-        #color: color of lights, input arguments include ('RGB', 'Random', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Violet', 'White')
+        #color: color of lights, input arguments include ('RGB', 'Random', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Violet', 'White', 'Off')
         self.led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
         self.ros_node = ros_node
         self.robot_name = robot_name
@@ -45,14 +45,15 @@ class Lights:
             color_des = self.Violet
         elif self.color == 'White':
             color_des = self.White
+        elif self.color == 'Off':
+            color_des = self.Off
         return color_des
     
     def init(self):
         # Initialize the LED publisher
         self.led_pub.advertise()
-        print('Lightring initialized')
 
-    def publish(self, color):
+    def pub(self, color):
         # Compose a LightringLeds message
         lightring_led_message = {"leds": color, "override_system": True}
         lightring_ros_msg = roslibpy.Message(lightring_led_message)
@@ -74,4 +75,4 @@ def play_lights(ros_node, robot_name, color):
     #initialize lights
     lightring.init()
     #publish lights
-    lightring.publish(color_pattern)
+    lightring.pub(color_pattern)
