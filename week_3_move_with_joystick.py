@@ -23,42 +23,55 @@ class Joystick:
     def __init__(self):
         self.joystick = pygame.joystick.Joystick(0)
         self.joystick.init()
+        self.thread_targets = [self.get_commands]
+        self.threads = [threading.Thread(target = t, daemon=True) for t in self.thread_targets]
+        self.stop_event = threading.Event()
+        self.lock = threading.Lock()
 
     # Main function to handle joystick input
     def get_commands(self):
-        manual_mode = False
+        while not self.stop_event.is_set():
+            pygame.event.pump()  # Process joystick events
 
-        try:
-            while True:
-                pygame.event.pump()  # Process joystick events
+            # Toggle manual mode when button 0 ("A" button) is pressed
+            if self.joystick.get_button(0):
+                manual_mode = True
+                print(f"Manual mode {'activated' if manual_mode else 'deactivated'}")
+                time.sleep(0.3)  # Debounce delay
+            elif self.joystick.get_button(2):
+                secondary_mode = True
+                print(f"Secondary mode {'activated' if secondary_mode else 'deactivated'}")
+                time.sleep(0.3)  # Debounce delay
+            elif self.joystick.get_button(1):
+                autonomous_mode = True
+                print(f"Autonomous mode {'activated' if autonomous_mode else 'deactivated'}")
+                time.sleep(0.3)
+            elif self.joystick.get_button(4):
+                armed = not armed
+                print(f"Robot {'armed' if armed else 'disarmed'}")
+            else:
+                pass
 
-                # Toggle manual mode when button 0 ("A" button) is pressed
-                if self.joystick.get_button(0):
-                    manual_mode = not manual_mode
-                    print(f"Manual mode {'activated' if manual_mode else 'deactivated'}")
-                    blink = True
-                    time.sleep(0.3)  # Debounce delay
-                elif self.joystick.get_button(1):
-                    #placeholder for other buttons
-                else:
-                    pass
+            if manual_mode:
+                # Get joystick axes for linear and angular velocities
+                linear_x = -self.joystick.get_axis(1)  # Invert Y-axis for forward/backward
+                angular_z = self.joystick.get_axis(0)  # X-axis for rotation
 
-                if manual_mode:
-                    # Get joystick axes for linear and angular velocities
-                    linear_x = -self.joystick.get_axis(1)  # Invert Y-axis for forward/backward
-                    angular_z = self.joystick.get_axis(0)  # X-axis for rotation
+                # set light
+                color = 'Green'
+            elif secondary_mode:
+                color = 'Red'
+            elif autonomous_mode:
+                linear_x = 1
+                angular_z = 1
+                color = 'Violet'
 
-                    # set light
-                    color = 'Green'
-                elif other_mode:
-                    #placeholder for other modes
-                else:
-                    pass
+            if armed:
+                blink = True
+            elif not armed:
+                blink = False
 
-                time.sleep(0.1)  # Loop at 10 Hz
-
-        except KeyboardInterrupt:
-            print("Joystick control interrupted.")
+            time.sleep(0.1)  # Loop at 10 Hz
         return color, blink, linear_x, angular_z
     
     def quit(self):
@@ -116,6 +129,10 @@ if __name__ == "__main__":
     # initialize publishers, threads, and joystick
     robot = RobotController()
     joy = Joystick()
+    manual_mode = False
+    secondary_mode = False
+    autonomous_mode = False
+    armed = False
 
     while True:
         #start button event thread
