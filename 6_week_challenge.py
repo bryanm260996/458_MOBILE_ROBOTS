@@ -15,7 +15,7 @@ if pygame.joystick.get_count() == 0:
 ros_node = roslibpy.Ros(host='192.168.8.104', port=9012)
 ros_node.run()
 
-robot_name = 'foxtrot'
+robot_name = 'echo'
 
 # Joystick class
 class Joystick:
@@ -26,7 +26,7 @@ class Joystick:
 
         # State variables
         self.manual_mode = False
-        self.secondary_mode = False
+        self.idle_mode = True
         self.autonomous_mode = False
         self.armed = False
         self.linear_x = 0.0
@@ -44,22 +44,22 @@ class Joystick:
 
             if self.joystick.get_button(0):  # "A" button
                 self.manual_mode = not self.manual_mode
-                self.secondary_mode = False
+                self.idle_mode = False
                 self.autonomous_mode = False
                 print(f"Manual mode {'activated' if self.manual_mode else 'deactivated'}")
                 time.sleep(0.3)  # Debounce delay
 
             if self.joystick.get_button(2):  # "X" button
-                self.secondary_mode = not self.secondary_mode
+                self.idle_mode = not self.idle_mode
                 self.manual_mode = False
-                self.autonomous_mode = False
-                print(f"Secondary mode {'activated' if self.secondary_mode else 'deactivated'}")
+                self.autonomou_mode = False
+                print(f"Secondary mode {'activated' if self.idle_mode else 'deactivated'}")
                 time.sleep(0.3)
 
             if self.joystick.get_button(1):  # "B" button
                 self.autonomous_mode = not self.autonomous_mode
                 self.manual_mode = False
-                self.secondary_mode = False
+                self.idle_mode = False
                 print(f"Autonomous mode {'activated' if self.autonomous_mode else 'deactivated'}")
                 time.sleep(0.3)
 
@@ -73,12 +73,12 @@ class Joystick:
                 self.linear_x = -self.joystick.get_axis(1)  # Invert Y-axis for forward/backward
                 self.angular_z = -self.joystick.get_axis(0)  # X-axis for rotation
                 self.color = 'Green'
-            elif self.secondary_mode:
-                self.color = 'Red'
+            elif self.idle_mode:
+                self.color = 'Blue'
             elif self.autonomous_mode:
                 self.linear_x = 1
                 self.angular_z = 1
-                self.color = 'Violet'
+                self.color = 'Yellow'
 
             self.blink = self.armed  # Blink if armed
             if self.armed == False:
@@ -102,12 +102,15 @@ class RobotController:
         # ROS publishers
         self.led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
         self.drive_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
+        self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
         self.led_thread = threading.Thread(target=self.leds, daemon=True)
+        self.audio_thread = threading.Thread(target=self.audio, daemon=True)
         self.drive_thread.start()
         self.led_thread.start()
+        self.audio_thread.start()
 
     def drive(self):
         while not self.stop_event.is_set():
@@ -128,17 +131,70 @@ class RobotController:
     def leds(self):
         while not self.stop_event.is_set():
             play_lights(ros_node, robot_name, self.joystick.color)
-            if self.joystick.blink:
+            if self.joystick.armed:
                 time.sleep(0.5)  # Blink on
                 play_lights(ros_node, robot_name, 'Off')
                 time.sleep(0.5)  # Blink off
             else:
                 time.sleep(1)  # Keep the LED color
 
+    def audio(self):
+        last_mode = None  # Track the last executed mode
+
+        while not self.stop_event.is_set():
+            if self.joystick.armed:
+                # Play continuous 400 Hz tone when armed
+                notes = [{'frequency': 300, 'max_runtime': {'sec': 3, 'nanosec': 0}}]
+                audio_message = {'notes': notes, 'append': False}
+                self.audio_pub.publish(roslibpy.Message(audio_message))
+                time.sleep(3)  # Sleep to match the tone duration
+                continue  # Restart loop to keep checking if armed is still active
+
+            # Detect the current mode
+            current_mode = None
+            notes = []
+            sleep_duration = 0
+
+            if self.joystick.manual_mode:
+                current_mode = "manual"
+                notes = [
+                    {'frequency': 600, 'max_runtime': {'sec': 0, 'nanosec': int(5e8)}},
+                    {'frequency': 750, 'max_runtime': {'sec': 0, 'nanosec': int(5e8)}}
+                ]
+                sleep_duration = 1
+            
+            elif self.joystick.idle_mode:
+                current_mode = "idle"
+                notes = [
+                    {'frequency': 600, 'max_runtime': {'sec': 0, 'nanosec': int(5e8)}},
+                    {'frequency': 450, 'max_runtime': {'sec': 0, 'nanosec': int(5e8)}}
+                ]
+                sleep_duration = 1
+
+            elif self.joystick.autonomous_mode:
+                current_mode = "autonomous"
+                notes = [
+                    {'frequency': 600, 'max_runtime': {'sec': 0, 'nanosec': int(3e8)}},
+                    {'frequency': 750, 'max_runtime': {'sec': 0, 'nanosec': int(3e8)}},
+                    {'frequency': 900, 'max_runtime': {'sec': 0, 'nanosec': int(3e8)}}
+                ]
+                sleep_duration = 0.9
+
+            # Play notes only if the mode has changed
+            if current_mode and current_mode != last_mode:
+                audio_message = {'notes': notes, 'append': False}
+                self.audio_pub.publish(roslibpy.Message(audio_message))
+                time.sleep(sleep_duration)  # Wait while playing the notes
+                last_mode = current_mode  # Update last mode to prevent re-triggering
+
+            time.sleep(0.1)  # Small delay to prevent excessive looping
+
+
     def stop(self):
         self.stop_event.set()
         self.drive_thread.join()
         self.led_thread.join()
+        self.audio_thread.join()
         self.cleanup()
 
     def cleanup(self):
@@ -146,6 +202,7 @@ class RobotController:
         self.drive_pub.publish(roslibpy.Message({"linear": {"x": 0.0, "y": 0.0, "z": 0.0}, "angular": {"x": 0.0, "y": 0.0, "z": 0.0}}))
         self.led_pub.unadvertise()
         self.drive_pub.unadvertise()
+        self.audio_pub.unadvertise()
 
 
 # Main loop
