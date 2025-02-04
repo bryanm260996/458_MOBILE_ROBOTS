@@ -103,15 +103,31 @@ class RobotController:
         self.led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
         self.drive_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
         self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
+        self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/mouse', 'irobot_create_msgs/Mouse')
+        self.odom_sub = self.odom_topic.subscribe(self.callback)
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
         self.led_thread = threading.Thread(target=self.leds, daemon=True)
         self.audio_thread = threading.Thread(target=self.audio, daemon=True)
+        self.callback_thread = threading.Thread(target=self.callback, daemon=True)
         self.drive_thread.start()
         self.led_thread.start()
         self.audio_thread.start()
+        self.callback_thread.start()
 
+    def callback(self, message):
+        msg_x = message.get('integrated_x')
+        msg_y = message.get('integrated_y')
+        print(f'x:{msg_x}, y:{msg_y}')
+        #o = message.get('orientation')
+        #x = o.get('x')
+        #y = o.get('y')
+        #z = o.get('z')
+        #w = o.get('w')
+        #yaw = math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z))
+        
+    
     def drive(self):
         while not self.stop_event.is_set():
             drive_message = {
@@ -195,6 +211,7 @@ class RobotController:
         self.drive_thread.join()
         self.led_thread.join()
         self.audio_thread.join()
+        self.callback_thread.join()
         self.cleanup()
 
     def cleanup(self):
@@ -203,6 +220,7 @@ class RobotController:
         self.led_pub.unadvertise()
         self.drive_pub.unadvertise()
         self.audio_pub.unadvertise()
+        self.odom_topic.unsubscribe()
 
 
 # Main loop
