@@ -76,8 +76,8 @@ class Joystick:
             elif self.idle_mode:
                 self.color = 'Blue'
             elif self.autonomous_mode:
-                self.linear_x = 1
-                self.angular_z = 1
+                #self.linear_x = 1
+                #self.angular_z = 1
                 self.color = 'Yellow'
 
             self.blink = self.armed  # Blink if armed
@@ -104,30 +104,43 @@ class RobotController:
         self.drive_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
         self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
         self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/mouse', 'irobot_create_msgs/Mouse')
-        self.odom_sub = self.odom_topic.subscribe(self.callback)
+        self.odom_sub = self.odom_topic.subscribe(self.odometer)
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
         self.led_thread = threading.Thread(target=self.leds, daemon=True)
         self.audio_thread = threading.Thread(target=self.audio, daemon=True)
-        self.callback_thread = threading.Thread(target=self.callback, daemon=True)
+        self.callback_thread = threading.Thread(target=self.odometer, daemon=True)
         self.drive_thread.start()
         self.led_thread.start()
         self.audio_thread.start()
         self.callback_thread.start()
 
-    def callback(self, message):
+    def odometer(self, message):
+        x_init = message.get('integrated_x')
         msg_x = message.get('integrated_x')
         msg_y = message.get('integrated_y')
         print(f'x:{msg_x}, y:{msg_y}')
-        #o = message.get('orientation')
-        #x = o.get('x')
-        #y = o.get('y')
-        #z = o.get('z')
-        #w = o.get('w')
-        #yaw = math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z))
         
+        
+    def ir_sensor(self):
+        while not self.stop_event.is_set():
+        # get readings from left, right, and front
+        # if front > max number:
+        # execute turn sequence (recieve 'last_turn' to decide right or left)
+        # if right or left > max number:
+        # small adjustment  
+            print('reading ir sensor')  
     
+    def auto_mow(self):
+        while not self.stop_event.is_set():
+            if self.joystick.autonomous_mode == True:
+                # drive straight for distance
+                # right turn sequence (set 'last_turn' to 'right')
+                # drive straight for distance
+                # left turn sequence (set 'lat_turn to 'left')
+                print('auto mowing')
+
     def drive(self):
         while not self.stop_event.is_set():
             drive_message = {
