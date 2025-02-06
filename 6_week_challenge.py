@@ -104,7 +104,9 @@ class RobotController:
         self.drive_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
         self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
         self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/mouse', 'irobot_create_msgs/Mouse')
+        self.ir_topic = roslibpy.Topic(ros_node, f'/{robot_name}/ir_sensor', 'irobot_create_msgs/IrIntensityVector')
         self.odom_sub = self.odom_topic.subscribe(self.odometer)
+        self.ir_sub = self.ir_topic.subscribe(self.ir_sensor)
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
