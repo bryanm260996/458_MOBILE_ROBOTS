@@ -15,7 +15,7 @@ if pygame.joystick.get_count() == 0:
 ros_node = roslibpy.Ros(host='192.168.8.104', port=9012)
 ros_node.run()
 
-robot_name = 'echo'
+robot_name = 'foxtrot'
 
 # Joystick class
 class Joystick:
@@ -74,10 +74,10 @@ class Joystick:
                 self.angular_z = -self.joystick.get_axis(0)  # X-axis for rotation
                 self.color = 'Green'
             elif self.idle_mode:
+                self.linear_x = 0.0
+                self.angular_z = 0.0
                 self.color = 'Blue'
             elif self.autonomous_mode:
-                #self.linear_x = 1
-                #self.angular_z = 1
                 self.color = 'Yellow'
 
             self.blink = self.armed  # Blink if armed
@@ -104,27 +104,20 @@ class RobotController:
         self.drive_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
         self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
         self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/mouse', 'irobot_create_msgs/Mouse')
-        self.ir_topic = roslibpy.Topic(ros_node, f'/{robot_name}/ir_sensor', 'irobot_create_msgs/IrIntensityVector')
-        self.odom_sub = self.odom_topic.subscribe(self.odometer)
-        self.ir_sub = self.ir_topic.subscribe(self.ir_sensor)
+        #self.ir_topic = roslibpy.Topic(ros_node, f'/{robot_name}/ir_intensity', 'irobot_create_msgs/IrIntensityVector')
+        #self.odom_sub = self.odom_topic.subscribe(self.odom_callback)
+        #self.ir_sub = self.ir_topic.subscribe(self.ir_sensor)
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
         self.led_thread = threading.Thread(target=self.leds, daemon=True)
         self.audio_thread = threading.Thread(target=self.audio, daemon=True)
-        self.callback_thread = threading.Thread(target=self.odometer, daemon=True)
+        self.auto_mow_thread = threading.Thread(target=self.auto_mow, daemon=True)
         self.drive_thread.start()
         self.led_thread.start()
         self.audio_thread.start()
-        self.callback_thread.start()
+        self.auto_mow_thread.start()
 
-    def odometer(self, message):
-        x_init = message.get('integrated_x')
-        msg_x = message.get('integrated_x')
-        msg_y = message.get('integrated_y')
-        print(f'x:{msg_x}, y:{msg_y}')
-        
-        
     def ir_sensor(self):
         while not self.stop_event.is_set():
         # get readings from left, right, and front
@@ -133,30 +126,69 @@ class RobotController:
         # if right or left > max number:
         # small adjustment  
             print('reading ir sensor')  
-    
+
     def auto_mow(self):
+        last_turn = 'left'  # track the last turn direction
         while not self.stop_event.is_set():
-            if self.joystick.autonomous_mode == True:
-                # drive straight for distance
-                # right turn sequence (set 'last_turn' to 'right')
-                # drive straight for distance
-                # left turn sequence (set 'lat_turn to 'left')
-                print('auto mowing')
+            if self.joystick.autonomous_mode and self.joystick.armed:           
+                # Drive straight
+                t_start = time.time()
+                t_elapsed = 0
+                while t_elapsed < 11.5:
+                    drive_message = {'linear': {'x': 0.15, 'y': 0.0, 'z': 0.0},
+                                    'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0}} 
+                    self.drive_pub.publish(roslibpy.Message(drive_message))
+                    t_elapsed = time.time() - t_start
+                    print(t_elapsed)
+
+                # Decide on the turn direction (alternate turns)
+                if last_turn == 'right':
+                    # Left turn sequence
+                    print("Making left turn")
+                    t_start_turn = time.time()
+                    t_elapsed = 0
+                    while t_elapsed < 1:
+                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},  # Stop moving forward
+                                        'angular': {'x': 0.0, 'y': 0.0, 'z': 1.0}}  # Rotate left
+                        self.drive_pub.publish(roslibpy.Message(drive_message))
+                        t_elapsed = time.time() - t_start_turn
+                        print(t_elapsed)
+                    time.sleep(1)
+                    last_turn = 'left'  # Update last turn direction to 'left'
+                elif last_turn == 'left':
+                    # Right turn sequence
+                    print("Making right turn")
+                    t_start_turn = time.time()
+                    t_elapsed = 0
+                    while t_elapsed < 1:
+                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},  # Stop moving forward
+                                        'angular': {'x': 0.0, 'y': 0.0, 'z': -1.0}}  # Rotate right
+                        self.drive_pub.publish(roslibpy.Message(drive_message))
+                        t_elapsed = time.time() - t_start_turn
+                        print(t_elapsed)
+                    time.sleep(1)
+                    last_turn = 'right'  # Update last turn direction to 'right'
+
+                # Sleep to allow the turn to complete before the next action
+                time.sleep(0.1)
+
 
     def drive(self):
         while not self.stop_event.is_set():
-            drive_message = {
-                "linear": {"x": self.joystick.linear_x, "y": 0.0, "z": 0.0},
-                "angular": {"x": 0.0, "y": 0.0, "z": self.joystick.angular_z}
-            }
-            self.drive_pub.publish(roslibpy.Message(drive_message))
-            time.sleep(0.1)  # 10Hz
-            if self.joystick.armed == False:
-                drive_message = {
-                "linear": {"x": self.joystick.linear_x, "y": 0.0, "z": 0.0},
-                "angular": {"x": 0.0, "y": 0.0, "z": self.joystick.angular_z}
-            }
-            self.drive_pub.publish(roslibpy.Message(drive_message))
+            if self.joystick.manual_mode == True:
+                if self.joystick.armed == False:
+                    drive_message = {
+                    "linear": {"x": 0.0, "y": 0.0, "z": 0.0},
+                    "angular": {"x": 0.0, "y": 0.0, "z": 0.0}
+                    }
+                    self.drive_pub.publish(roslibpy.Message(drive_message))
+                elif self.joystick.armed == True:
+                    drive_message = {
+                    "linear": {"x": self.joystick.linear_x, "y": 0.0, "z": 0.0},
+                    "angular": {"x": 0.0, "y": 0.0, "z": self.joystick.angular_z}
+                    }
+                    self.drive_pub.publish(roslibpy.Message(drive_message))
+            
             time.sleep(0.1)  # 10Hz
 
     def leds(self):
@@ -173,14 +205,6 @@ class RobotController:
         last_mode = None  # Track the last executed mode
 
         while not self.stop_event.is_set():
-            if self.joystick.armed:
-                # Play continuous 400 Hz tone when armed
-                notes = [{'frequency': 300, 'max_runtime': {'sec': 3, 'nanosec': 0}}]
-                audio_message = {'notes': notes, 'append': False}
-                self.audio_pub.publish(roslibpy.Message(audio_message))
-                time.sleep(3)  # Sleep to match the tone duration
-                continue  # Restart loop to keep checking if armed is still active
-
             # Detect the current mode
             current_mode = None
             notes = []
@@ -210,15 +234,20 @@ class RobotController:
                     {'frequency': 900, 'max_runtime': {'sec': 0, 'nanosec': int(3e8)}}
                 ]
                 sleep_duration = 0.9
+            
+            elif self.joystick.armed == True:
+                current_mode = 'armed'
+                notes = [{'frequency': 300, 'max_runtime': {'sec': 3, 'nanosec': 0}}]
+                sleep_duration = 3
 
             # Play notes only if the mode has changed
             if current_mode and current_mode != last_mode:
                 audio_message = {'notes': notes, 'append': False}
                 self.audio_pub.publish(roslibpy.Message(audio_message))
-                time.sleep(sleep_duration)  # Wait while playing the notes
+                time.sleep(sleep_duration)
                 last_mode = current_mode  # Update last mode to prevent re-triggering
 
-            time.sleep(0.1)  # Small delay to prevent excessive looping
+            time.sleep(0.1)
 
 
     def stop(self):
@@ -226,7 +255,7 @@ class RobotController:
         self.drive_thread.join()
         self.led_thread.join()
         self.audio_thread.join()
-        self.callback_thread.join()
+        self.auto_mow_thread.join()
         self.cleanup()
 
     def cleanup(self):
