@@ -3,6 +3,7 @@ import roslibpy
 import pygame
 from lights_function import play_lights
 import threading
+import math
 
 # Initialize pygame and joystick control
 pygame.init()
@@ -98,25 +99,39 @@ class RobotController:
     def __init__(self, joystick):
         self.joystick = joystick
         self.stop_event = threading.Event()
+        self.latest_odom = None
 
         # ROS publishers
         self.led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
         self.drive_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
         self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
-        self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/mouse', 'irobot_create_msgs/Mouse')
         #self.ir_topic = roslibpy.Topic(ros_node, f'/{robot_name}/ir_intensity', 'irobot_create_msgs/IrIntensityVector')
-        #self.odom_sub = self.odom_topic.subscribe(self.odom_callback)
         #self.ir_sub = self.ir_topic.subscribe(self.ir_sensor)
+        self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/odom', 'nav_msgs/Odometry')
+        self.odom_topic.subscribe(self.odom_callback) 
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
         self.led_thread = threading.Thread(target=self.leds, daemon=True)
         self.audio_thread = threading.Thread(target=self.audio, daemon=True)
         self.auto_mow_thread = threading.Thread(target=self.auto_mow, daemon=True)
+        #self.odom_thread = threading.Thread(target=self.odom_callback, daemon=True)
         self.drive_thread.start()
         self.led_thread.start()
         self.audio_thread.start()
         self.auto_mow_thread.start()
+        #self.odom_thread.start()
+
+    def odom_callback(self, message):
+        self.latest_odom = {
+            "position": message['pose']['pose']['position'],
+            "orientation": message['pose']['pose']['orientation'],
+            "linear_velocity": message['twist']['twist']['linear'],
+            "angular_velocity": message['twist']['twist']['angular']
+        }
+    
+    def get_odom(self):
+        return self.latest_odom
 
     def ir_sensor(self):
         while not self.stop_event.is_set():
@@ -131,42 +146,86 @@ class RobotController:
         last_turn = 'left'  # track the last turn direction
         while not self.stop_event.is_set():
             if self.joystick.autonomous_mode and self.joystick.armed:           
-                # Drive straight
-                t_start = time.time()
-                t_elapsed = 0
-                while t_elapsed < 11.5:
+                # retrieve data and set start position
+                msg = self.get_odom()
+                if msg:
+                    start_x = msg["position"]['x']
+                    start_y = msg["position"]['y']
+                else:
+                    print('waiting for odometry data')
+
+                position = 0.0
+                # Drive straight for 1 meter
+                while position < 1:
                     drive_message = {'linear': {'x': 0.15, 'y': 0.0, 'z': 0.0},
                                     'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0}} 
-                    self.drive_pub.publish(roslibpy.Message(drive_message))
-                    t_elapsed = time.time() - t_start
-                    print(t_elapsed)
+                    self.drive_pub.publish(roslibpy.Message(drive_message)) #drive forward
+                    
+                    msg = self.get_odom() #retrieve data and calculate relative position
+                    odom_x = msg["position"]['x']
+                    odom_y = msg["position"]['y']
+                    position = math.sqrt((odom_x - start_x)**2 + ((odom_y - start_y)**2))
+                    print(position)
+
+                    time.sleep(0.1) #10Hz repetition
 
                 # Decide on the turn direction (alternate turns)
                 if last_turn == 'right':
                     # Left turn sequence
                     print("Making left turn")
-                    t_start_turn = time.time()
-                    t_elapsed = 0
-                    while t_elapsed < 1:
-                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},  # Stop moving forward
-                                        'angular': {'x': 0.0, 'y': 0.0, 'z': 1.0}}  # Rotate left
+                    # retrieve data and set start position
+                    msg = self.get_odom()
+                    if msg:
+                        start_angle = msg["orientation"]['z']
+                        if start_angle < 0:
+                            start_angle = start_angle+2
+                    else:
+                        print('waiting for odometry data')
+
+                    angle = 0.0
+                    while angle < 0.5:
+                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
+                                        'angular': {'x': 0.0, 'y': 0.0, 'z': 0.5}}  # Rotate left
                         self.drive_pub.publish(roslibpy.Message(drive_message))
-                        t_elapsed = time.time() - t_start_turn
-                        print(t_elapsed)
-                    time.sleep(1)
+
+                        msg = self.get_odom() #retrieve data and calculate relative turn angle
+                        current_angle = msg["orientation"]['z']
+                        if current_angle < 0:
+                            current_angle = current_angle+2
+                        angle = current_angle-start_angle
+                        if -2<angle<-1.5:
+                            angle = angle+2
+                        print(angle)
+                        time.sleep(0.1)
                     last_turn = 'left'  # Update last turn direction to 'left'
+                
                 elif last_turn == 'left':
                     # Right turn sequence
                     print("Making right turn")
-                    t_start_turn = time.time()
-                    t_elapsed = 0
-                    while t_elapsed < 1:
-                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},  # Stop moving forward
-                                        'angular': {'x': 0.0, 'y': 0.0, 'z': -1.0}}  # Rotate right
+                    # retrieve data and set start position
+                    msg = self.get_odom()
+                    if msg:
+                        start_angle = msg["orientation"]['z']
+                        if start_angle < 0:
+                            start_angle = start_angle+2
+                    else:
+                        print('waiting for odometry data')
+                    
+                    angle = 0.0
+                    while angle > -0.5:
+                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0}, 
+                                        'angular': {'x': 0.0, 'y': 0.0, 'z': -0.5}}  # Rotate right
                         self.drive_pub.publish(roslibpy.Message(drive_message))
-                        t_elapsed = time.time() - t_start_turn
-                        print(t_elapsed)
-                    time.sleep(1)
+
+                        msg = self.get_odom() #retrieve data and calculate relative turn angle
+                        current_angle = msg["orientation"]['z']
+                        if current_angle < 0:
+                            current_angle = current_angle+2
+                        angle = current_angle-start_angle
+                        if 1.5<angle<2:
+                            angle = angle-2 
+                        print(angle)
+                        time.sleep(0.1)
                     last_turn = 'right'  # Update last turn direction to 'right'
 
                 # Sleep to allow the turn to complete before the next action
@@ -256,6 +315,7 @@ class RobotController:
         self.led_thread.join()
         self.audio_thread.join()
         self.auto_mow_thread.join()
+        self.odom_thread.join()
         self.cleanup()
 
     def cleanup(self):
