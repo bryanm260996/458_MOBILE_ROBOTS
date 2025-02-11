@@ -115,14 +115,12 @@ class RobotController:
         self.led_thread = threading.Thread(target=self.leds, daemon=True)
         self.audio_thread = threading.Thread(target=self.audio, daemon=True)
         self.auto_mow_thread = threading.Thread(target=self.auto_mow, daemon=True)
-        #self.odom_thread = threading.Thread(target=self.odom_callback, daemon=True)
         self.drive_thread.start()
         self.led_thread.start()
         self.audio_thread.start()
         self.auto_mow_thread.start()
-        #self.odom_thread.start()
 
-    def odom_callback(self, message):
+    def odom_callback(self, message): #read odometer data
         self.latest_odom = {
             "position": message['pose']['pose']['position'],
             "orientation": message['pose']['pose']['orientation'],
@@ -142,97 +140,109 @@ class RobotController:
         # small adjustment  
             print('reading ir sensor')  
 
-    def auto_mow(self):
+    def drive_straight(self, dist):
+        # retrieve data and set start position
+        msg = self.get_odom()
+        if msg:
+            start_x = msg["position"]['x']
+            start_y = msg["position"]['y']
+        else:
+            print('waiting for odometry data')
+
+        position = 0.0
+        # Drive straight for 1 meter
+        while position < dist:
+            drive_message = {'linear': {'x': 0.15, 'y': 0.0, 'z': 0.0},
+                            'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0}} 
+            self.drive_pub.publish(roslibpy.Message(drive_message)) #drive forward
+            
+            msg = self.get_odom() #retrieve data and calculate relative position
+            odom_x = msg["position"]['x']
+            odom_y = msg["position"]['y']
+            position = math.sqrt((odom_x - start_x)**2 + ((odom_y - start_y)**2))
+            print(position)
+
+            time.sleep(0.1) #10Hz repetition
+    
+    def turn_right(self):
+        # Right turn sequence
+        print("Making right turn")
+        # retrieve data and set start position
+        msg = self.get_odom()
+        if msg:
+            start_angle = msg["orientation"]['z']
+            if start_angle < 0:
+                start_angle = start_angle+2
+        else:
+            print('waiting for odometry data')
+        
+        angle = 0.0
+        while angle > -0.5:
+            drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0}, 
+                            'angular': {'x': 0.0, 'y': 0.0, 'z': -0.5}}  # Rotate right
+            self.drive_pub.publish(roslibpy.Message(drive_message))
+
+            msg = self.get_odom() #retrieve data and calculate relative turn angle
+            current_angle = msg["orientation"]['z']
+            if current_angle < 0:
+                current_angle = current_angle+2
+            angle = current_angle-start_angle
+            if 1.5<angle<2:
+                angle = angle-2 
+            print(angle)
+            time.sleep(0.1)
+
+    def turn_left(self):
+        # Left turn sequence
+        print("Making left turn")
+        # retrieve data and set start position
+        msg = self.get_odom()
+        if msg:
+            start_angle = msg["orientation"]['z']
+            if start_angle < 0:
+                start_angle = start_angle+2
+        else:
+            print('waiting for odometry data')
+
+        angle = 0.0
+        while angle < 0.5:
+            drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
+                            'angular': {'x': 0.0, 'y': 0.0, 'z': 0.5}}  # Rotate left
+            self.drive_pub.publish(roslibpy.Message(drive_message))
+
+            msg = self.get_odom() #retrieve data and calculate relative turn angle
+            current_angle = msg["orientation"]['z']
+            if current_angle < 0:
+                current_angle = current_angle+2
+            angle = current_angle-start_angle
+            if -2<angle<-1.5:
+                angle = angle+2
+            print(angle)
+            time.sleep(0.1)
+
+    def auto_mow(self): #autonomous mode
         last_turn = 'left'  # track the last turn direction
         while not self.stop_event.is_set():
             if self.joystick.autonomous_mode and self.joystick.armed:           
-                # retrieve data and set start position
-                msg = self.get_odom()
-                if msg:
-                    start_x = msg["position"]['x']
-                    start_y = msg["position"]['y']
-                else:
-                    print('waiting for odometry data')
-
-                position = 0.0
-                # Drive straight for 1 meter
-                while position < 1:
-                    drive_message = {'linear': {'x': 0.15, 'y': 0.0, 'z': 0.0},
-                                    'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0}} 
-                    self.drive_pub.publish(roslibpy.Message(drive_message)) #drive forward
-                    
-                    msg = self.get_odom() #retrieve data and calculate relative position
-                    odom_x = msg["position"]['x']
-                    odom_y = msg["position"]['y']
-                    position = math.sqrt((odom_x - start_x)**2 + ((odom_y - start_y)**2))
-                    print(position)
-
-                    time.sleep(0.1) #10Hz repetition
-
+                self.drive_straight(1)
                 # Decide on the turn direction (alternate turns)
                 if last_turn == 'right':
-                    # Left turn sequence
-                    print("Making left turn")
-                    # retrieve data and set start position
-                    msg = self.get_odom()
-                    if msg:
-                        start_angle = msg["orientation"]['z']
-                        if start_angle < 0:
-                            start_angle = start_angle+2
-                    else:
-                        print('waiting for odometry data')
-
-                    angle = 0.0
-                    while angle < 0.5:
-                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
-                                        'angular': {'x': 0.0, 'y': 0.0, 'z': 0.5}}  # Rotate left
-                        self.drive_pub.publish(roslibpy.Message(drive_message))
-
-                        msg = self.get_odom() #retrieve data and calculate relative turn angle
-                        current_angle = msg["orientation"]['z']
-                        if current_angle < 0:
-                            current_angle = current_angle+2
-                        angle = current_angle-start_angle
-                        if -2<angle<-1.5:
-                            angle = angle+2
-                        print(angle)
-                        time.sleep(0.1)
+                    self.turn_left()
+                    self.drive_straight(0.25)
+                    self.turn_left()
                     last_turn = 'left'  # Update last turn direction to 'left'
                 
                 elif last_turn == 'left':
-                    # Right turn sequence
-                    print("Making right turn")
-                    # retrieve data and set start position
-                    msg = self.get_odom()
-                    if msg:
-                        start_angle = msg["orientation"]['z']
-                        if start_angle < 0:
-                            start_angle = start_angle+2
-                    else:
-                        print('waiting for odometry data')
-                    
-                    angle = 0.0
-                    while angle > -0.5:
-                        drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0}, 
-                                        'angular': {'x': 0.0, 'y': 0.0, 'z': -0.5}}  # Rotate right
-                        self.drive_pub.publish(roslibpy.Message(drive_message))
-
-                        msg = self.get_odom() #retrieve data and calculate relative turn angle
-                        current_angle = msg["orientation"]['z']
-                        if current_angle < 0:
-                            current_angle = current_angle+2
-                        angle = current_angle-start_angle
-                        if 1.5<angle<2:
-                            angle = angle-2 
-                        print(angle)
-                        time.sleep(0.1)
+                    self.turn_right()
+                    self.drive_straight(0.25)
+                    self.turn_right()
                     last_turn = 'right'  # Update last turn direction to 'right'
 
                 # Sleep to allow the turn to complete before the next action
                 time.sleep(0.1)
 
 
-    def drive(self):
+    def drive(self): #manual mode
         while not self.stop_event.is_set():
             if self.joystick.manual_mode == True:
                 if self.joystick.armed == False:
@@ -250,7 +260,7 @@ class RobotController:
             
             time.sleep(0.1)  # 10Hz
 
-    def leds(self):
+    def leds(self): #control lightring
         while not self.stop_event.is_set():
             play_lights(ros_node, robot_name, self.joystick.color)
             if self.joystick.armed:
@@ -260,7 +270,7 @@ class RobotController:
             else:
                 time.sleep(1)  # Keep the LED color
 
-    def audio(self):
+    def audio(self): #play audio
         last_mode = None  # Track the last executed mode
 
         while not self.stop_event.is_set():
