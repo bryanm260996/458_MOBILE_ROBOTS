@@ -3,6 +3,7 @@ import roslibpy
 import pygame
 from lights_function import play_lights
 import threading
+import math
 
 # Initialize pygame and joystick control
 pygame.init()
@@ -105,8 +106,6 @@ class RobotController:
         self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
         self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/mouse', 'irobot_create_msgs/Mouse')
         self.ir_topic = roslibpy.Topic(ros_node, f'/{robot_name}/ir_intensity', 'irobot_create_msgs/IrIntensityVector')
-        #self.odom_sub = self.odom_topic.subscribe(self.odom_callback)
-        #self.ir_sub = self.ir_topic.subscribe(self.ir_sensor)
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
@@ -140,25 +139,24 @@ class RobotController:
         right_value = values[6]
         left_center= values[2]
         right_center=values[5]
-        error = left_value - right_value
+        #error = left_value - right_value
 
-        #print(f'{ROBOT_NAME} IR values: {values}')
         if front_value>10:
             print('object in FRONT')
             drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},  # Stop moving forward
-                                        'angular': {'x': 0.0, 'y': 0.0, 'z': -1.0}}  # Rotate right
+                            'angular': {'x': 0.0, 'y': 0.0, 'z': -1.0}}  # Rotate right
             self.drive_pub.publish(roslibpy.Message(drive_message))
             
         elif left_center>10:    
             print('object in FRONT LEFT')
             drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},  # Stop moving forward
-                                        'angular': {'x': 0.0, 'y': 0.0, 'z': -1.0}}  # Rotate right
+                            'angular': {'x': 0.0, 'y': 0.0, 'z': -1.0}}  # Rotate right
             self.drive_pub.publish(roslibpy.Message(drive_message))
 
         elif right_center>10:
             print('object in FRONT RIGHT')
             drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},  # Stop moving forward
-                                        'angular': {'x': 0.0, 'y': 0.0, 'z': 1.0}}  # Rotate right
+                            'angular': {'x': 0.0, 'y': 0.0, 'z': 1.0}}  # Rotate right
             self.drive_pub.publish(roslibpy.Message(drive_message))
             
         elif left_value>10:
@@ -171,17 +169,12 @@ class RobotController:
             drive_message = {'linear': {'x': 0.5, 'y': 0.0, 'z': 0.0},  # Stop moving forward
                                         'angular': {'x': 0.0, 'y': 0.0, 'z': 0.0}}  # Rotate right
             self.drive_pub.publish(roslibpy.Message(drive_message))
-            
-              
 
     def sense_ir(self):
         while not self.stop_event.is_set():
             if self.joystick.manual_mode == False:
                 if self.joystick.armed == True:
                     self.ir_topic.subscribe(self.callback_ir)
-
-
-            
 
     def drive_straight(self, dist):
         # retrieve data and set start position
@@ -283,7 +276,6 @@ class RobotController:
                 # Sleep to allow the turn to complete before the next action
                 time.sleep(0.1)
 
-
     def drive(self): #manual mode
         while not self.stop_event.is_set():
             if self.joystick.manual_mode == True:
@@ -359,7 +351,6 @@ class RobotController:
                 last_mode = current_mode  # Update last mode to prevent re-triggering
 
             time.sleep(0.1)
-
 
     def stop(self):
         self.stop_event.set()
