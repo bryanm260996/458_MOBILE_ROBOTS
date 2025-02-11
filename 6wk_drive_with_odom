@@ -25,14 +25,8 @@ class Odom:
         # Service to reset odometry position and orientation
         self.reset_odom_service = roslibpy.Service(ros, f'/{ROBOT_NAME}/reset_pose', 'irobot_create_msgs/ResetPose')
 
-        # Initialize threads
-        self.thread_targets = [
-            lambda: self.move_forward(1),  # Pass distance as an argument
-            self.right_turn,
-            self.left_turn,
-            self.stop_robot
-        ]
-        self.threads = [threading.Thread(target=t, daemon=True) for t in self.thread_targets]
+        # Subscribe to odom updates (this runs in the background)
+        self.odom_topic.subscribe(self.callback_odom)
 
     # Function to create movement commands
     def create_movement_command(self, linear_speed=0.1, angular_speed=0.0):
@@ -89,32 +83,60 @@ class Odom:
             else:
                 print("Failed to reset odometry.")
 
-    # Start threads
-    def start_threads(self):
-        for thread in self.threads:
-            thread.start()
+    # Threaded function to run robot movements
+    def threaded_move_forward(self, dist):
+        # Ensure move_forward is run in a separate thread but waits for completion
+        thread = threading.Thread(target=self.move_forward, args=(dist,))
+        thread.start()
+        thread.join()  # This ensures that the main program waits for the thread to finish
 
-        # Join threads to keep main thread running
-        for thread in self.threads:
-            thread.join()
+    def threaded_right_turn(self):
+        # Same for right turn
+        thread = threading.Thread(target=self.right_turn)
+        thread.start()
+        thread.join()
+
+    def threaded_left_turn(self):
+        # Same for left turn
+        thread = threading.Thread(target=self.left_turn)
+        thread.start()
+        thread.join()
+
+    def threaded_stop_robot(self):
+        # Same for stop
+        thread = threading.Thread(target=self.stop_robot)
+        thread.start()
+        thread.join()
 
     def run_loop(self):
-        self.odom_topic.subscribe(self.callback_odom)  # Subscribe to odom updates
-        self.start_threads()
+        # Ensure each movement happens sequentially
+        self.threaded_move_forward(1)
+        time.sleep(1)  # Let the robot move for a bit before turning
+        self.threaded_right_turn()
+        time.sleep(2)  # Allow time for the turn
+        self.threaded_move_forward(1)
+        time.sleep(1)
+        self.threaded_right_turn()
+        time.sleep(2)  # Allow time for the turn
+        self.threaded_stop_robot()
 
 if __name__ == '__main__':
     robot = Odom()
     try:
         robot.run_loop()
+        # Keep the main thread running to allow ROS callbacks
         while True:
             if robot.latest_odom:
                 x_position = robot.latest_odom["position"]["x"]
                 print(f"Current X position: {x_position}")
                 y_position = robot.latest_odom["position"]["y"]
                 print(f"Current Y position: {y_position}")
+            time.sleep(1)
     except KeyboardInterrupt:
         print('Shutting down robot control...')
         ros.terminate()
+
+
 
 
 
