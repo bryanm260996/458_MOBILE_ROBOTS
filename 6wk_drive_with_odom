@@ -1,0 +1,142 @@
+import roslibpy
+import time
+import threading
+
+# Configuration
+IP = '192.168.8.104'
+PORT = 9012
+ROBOT_NAME = 'india'
+
+# Initialize ROS connection
+ros = roslibpy.Ros(host=IP, port=PORT)
+ros.run()
+
+class Odom:
+    def __init__(self):
+        self.latest_odom = None
+        self.odometry_reset_done = False
+
+        # Initialize movement publisher
+        self.movement_topic = roslibpy.Topic(ros, f'/{ROBOT_NAME}/cmd_vel', 'geometry_msgs/Twist')
+
+        # Initialize odom sensor subscriber
+        self.odom_topic = roslibpy.Topic(ros, f'/{ROBOT_NAME}/odom', 'nav_msgs/Odometry')
+
+        # Service to reset odometry position and orientation
+        self.reset_odom_service = roslibpy.Service(ros, f'/{ROBOT_NAME}/reset_pose', 'irobot_create_msgs/ResetPose')
+
+        # Subscribe to odom updates (this runs in the background)
+        self.odom_topic.subscribe(self.callback_odom)
+
+    # Function to create movement commands
+    def create_movement_command(self, linear_speed=0.1, angular_speed=0.0):
+        return {
+            'linear': {'x': linear_speed, 'y': 0.0, 'z': 0.0},
+            'angular': {'x': 0.0, 'y': 0.0, 'z': angular_speed}
+        }
+
+    # Movement functions
+    def move_forward(self, dist):
+        speed = 0.1  # meters per second
+        movement_command = self.create_movement_command(linear_speed=speed)
+        self.movement_topic.publish(roslibpy.Message(movement_command))
+
+        move_time = dist / speed  # time to move the specified distance
+        print(f"Moving forward for {move_time} seconds.")
+        time.sleep(move_time)
+
+    def right_turn(self):
+        movement_command = self.create_movement_command(linear_speed=0.0, angular_speed=-1.57)  # 90 degrees (pi/2 radians)
+        self.movement_topic.publish(roslibpy.Message(movement_command))
+        time.sleep(2)  # Adjust duration to suit robot's turning speed
+
+    def left_turn(self):
+        movement_command = self.create_movement_command(linear_speed=0.0, angular_speed=1.57)  # 90 degrees
+        self.movement_topic.publish(roslibpy.Message(movement_command))
+        time.sleep(2)  # Adjust duration to suit robot's turning speed
+
+    def stop_robot(self):
+        movement_command = self.create_movement_command(linear_speed=0.0, angular_speed=0.0)
+        self.movement_topic.publish(roslibpy.Message(movement_command))
+
+    # Odometry sensor callback
+    def callback_odom(self, message):
+        self.latest_odom = {
+            "position": message['pose']['pose']['position'],
+            "orientation": message['pose']['pose']['orientation'],
+            "linear_velocity": message['twist']['twist']['linear'],
+            "angular_velocity": message['twist']['twist']['angular']
+        }
+
+        print(f"Current Position: x = {self.latest_odom['position']['x']}, y = {self.latest_odom['position']['y']}")
+
+        # Only reset odometry once
+        if self.latest_odom["position"]["x"] > 1 and not self.odometry_reset_done:
+            print('Turning around and resetting odometry...')
+            self.right_turn()
+            self.move_forward(1)
+            self.right_turn()
+            result = self.reset_odom_service.call(roslibpy.ServiceRequest())
+            if result.success:
+                print("Odometry reset successfully.")
+                self.odometry_reset_done = True  # Prevent resetting odometry multiple times
+            else:
+                print("Failed to reset odometry.")
+
+    # Threaded function to run robot movements
+    def threaded_move_forward(self, dist):
+        # Ensure move_forward is run in a separate thread but waits for completion
+        thread = threading.Thread(target=self.move_forward, args=(dist,))
+        thread.start()
+        thread.join()  # This ensures that the main program waits for the thread to finish
+
+    def threaded_right_turn(self):
+        # Same for right turn
+        thread = threading.Thread(target=self.right_turn)
+        thread.start()
+        thread.join()
+
+    def threaded_left_turn(self):
+        # Same for left turn
+        thread = threading.Thread(target=self.left_turn)
+        thread.start()
+        thread.join()
+
+    def threaded_stop_robot(self):
+        # Same for stop
+        thread = threading.Thread(target=self.stop_robot)
+        thread.start()
+        thread.join()
+
+    def run_loop(self):
+        # Ensure each movement happens sequentially
+        self.threaded_move_forward(1)
+        time.sleep(1)  # Let the robot move for a bit before turning
+        self.threaded_right_turn()
+        time.sleep(2)  # Allow time for the turn
+        self.threaded_move_forward(1)
+        time.sleep(1)
+        self.threaded_right_turn()
+        time.sleep(2)  # Allow time for the turn
+        self.threaded_stop_robot()
+
+if __name__ == '__main__':
+    robot = Odom()
+    try:
+        robot.run_loop()
+        # Keep the main thread running to allow ROS callbacks
+        while True:
+            if robot.latest_odom:
+                x_position = robot.latest_odom["position"]["x"]
+                print(f"Current X position: {x_position}")
+                y_position = robot.latest_odom["position"]["y"]
+                print(f"Current Y position: {y_position}")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print('Shutting down robot control...')
+        ros.terminate()
+
+
+
+
+
