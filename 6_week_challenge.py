@@ -93,7 +93,6 @@ class Joystick:
         self.thread.join()
         self.joystick.quit()
 
-
 # Robot class
 class RobotController:
     def __init__(self, joystick):
@@ -104,8 +103,9 @@ class RobotController:
         self.led_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_lightring', 'irobot_create_msgs/LightringLeds')
         self.drive_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_vel', 'geometry_msgs/Twist')
         self.audio_pub = roslibpy.Topic(ros_node, f'/{robot_name}/cmd_audio', 'irobot_create_msgs/AudioNoteVector')
-        self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/mouse', 'irobot_create_msgs/Mouse')
+        self.odom_topic = roslibpy.Topic(ros_node, f'/{robot_name}/odom', 'nav_msgs/Odometry')
         self.ir_topic = roslibpy.Topic(ros_node, f'/{robot_name}/ir_intensity', 'irobot_create_msgs/IrIntensityVector')
+        self.odom_topic.subscribe(self.odom_callback)
 
         # Create and start threads
         self.drive_thread = threading.Thread(target=self.drive, daemon=True)
@@ -117,6 +117,7 @@ class RobotController:
         self.led_thread.start()
         self.audio_thread.start()
         self.auto_mow_thread.start()
+        #self.sense_ir_thread.start()
 
     def odom_callback(self, message): #read odometer data
         self.latest_odom = {
@@ -233,6 +234,7 @@ class RobotController:
         print("Making left turn")
         # retrieve data and set start position
         msg = self.get_odom()
+        start_angle = 0.0
         if msg:
             start_angle = msg["orientation"]['z']
             if start_angle < 0:
@@ -241,6 +243,7 @@ class RobotController:
             print('waiting for odometry data')
 
         angle = 0.0
+        current_angle = 0.0
         while angle < 0.5:
             drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
                             'angular': {'x': 0.0, 'y': 0.0, 'z': 0.5}}  # Rotate left
@@ -260,16 +263,16 @@ class RobotController:
         last_turn = 'left'  # track the last turn direction
         while not self.stop_event.is_set():
             if self.joystick.autonomous_mode and self.joystick.armed:           
-                self.drive_straight(1)
+                self.drive_straight(1.5)
                 # Decide on the turn direction (alternate turns)
                 if last_turn == 'right':
                     self.turn_left()
-                    self.drive_straight(0.25)
+                    self.drive_straight(0.35)
                     self.turn_left()
                     last_turn = 'left'  # Update last turn direction to 'left'
                 elif last_turn == 'left':
                     self.turn_right()
-                    self.drive_straight(0.25)
+                    self.drive_straight(0.35)
                     self.turn_right()
                     last_turn = 'right'  # Update last turn direction to 'right'
 
@@ -358,7 +361,7 @@ class RobotController:
         self.led_thread.join()
         self.audio_thread.join()
         self.auto_mow_thread.join()
-        self.sense_ir_thread.join()
+        #self.sense_ir_thread.join()
         self.cleanup()
 
     def cleanup(self):
