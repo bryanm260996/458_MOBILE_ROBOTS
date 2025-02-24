@@ -16,7 +16,7 @@ if pygame.joystick.get_count() == 0:
 ros_node = roslibpy.Ros(host='192.168.8.104', port=9012)
 ros_node.run()
 
-robot_name = 'foxtrot'
+robot_name = 'echo'
 
 # Joystick class
 class Joystick:
@@ -199,7 +199,7 @@ class RobotController:
             odom_x = msg["position"]['x']
             odom_y = msg["position"]['y']
             position = math.sqrt((odom_x - start_x)**2 + ((odom_y - start_y)**2))
-            print(position)
+            #print(position)
 
             time.sleep(0.1) #10Hz repetition
     
@@ -217,7 +217,7 @@ class RobotController:
         
         angle = 0.0
         while angle > -dist:
-            drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0}, 
+            drive_message = {'linear': {'x': 0.12, 'y': 0.0, 'z': 0.0}, 
                             'angular': {'x': 0.0, 'y': 0.0, 'z': -0.5}}  # Rotate right
             self.drive_pub.publish(roslibpy.Message(drive_message))
 
@@ -229,7 +229,7 @@ class RobotController:
             if 1.5<angle<2:
                 angle = angle-2 
             print(angle)
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     def turn_left(self,dist):
         # Left turn sequence
@@ -247,7 +247,7 @@ class RobotController:
         angle = 0.0
         current_angle = 0.0
         while angle < dist:
-            drive_message = {'linear': {'x': 0.0, 'y': 0.0, 'z': 0.0},
+            drive_message = {'linear': {'x': 0.12, 'y': 0.0, 'z': 0.0},
                             'angular': {'x': 0.0, 'y': 0.0, 'z': 0.5}}  # Rotate left
             self.drive_pub.publish(roslibpy.Message(drive_message))
 
@@ -259,22 +259,37 @@ class RobotController:
             if -2<angle<-1.5:
                 angle = angle+2
             print(angle)
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     def auto_mow(self): #autonomous mode
         while not self.stop_event.is_set():
             if self.joystick.autonomous_mode and self.joystick.armed:
-                self.drive_straight(1.75)
+                self.drive_straight(1.4)
+                time.sleep(1)
                 # Decide on the turn direction (alternate turns)
                 if self.last_turn == 'right':
-                    self.turn_left(0.45)
-                    self.drive_straight(0.45)
-                    self.turn_left(0.45)
+                    self.turn_left(0.5)
+                    time.sleep(1)
+                    #self.drive_straight(0.26)
+                    #time.sleep(1)
+                    self.turn_left(0.5)
+                    time.sleep(1)
+                    #self.drive_straight(0.26)
+                    #time.sleep(1)
+                    #self.turn_left(0.25)
+                    #time.sleep(1)
                     self.last_turn = 'left'  # Update last turn direction to 'left'
                 elif self.last_turn == 'left':
                     self.turn_right(0.45)
-                    self.drive_straight(0.45)
+                    time.sleep(1)              
+                    #self.drive_straight(0.40)
+                    #time.sleep(1)
                     self.turn_right(0.45)
+                    time.sleep(1)
+                    #self.drive_straight(0.26)
+                    #time.sleep(1)
+                    #self.turn_right(0.31)
+                    #time.sleep(1)
                     self.last_turn = 'right'  # Update last turn direction to 'right'
 
                 # Sleep to allow the turn to complete before the next action
